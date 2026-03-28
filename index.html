@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PrepWizard • Label Printer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .item-row:hover { background-color: #f8fafc; }
+    .modal { animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes modalPop {
+      from { transform: scale(0.95) translateY(20px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .calendar-day {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    .calendar-day:hover { background-color: #f0f9ff; }
+    .calendar-day.selected {
+      background-color: #3b82f6;
+      color: #fff;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="bg-zinc-100 min-h-screen">
+  <div class="max-w-4xl mx-auto bg-white shadow-xl min-h-screen flex flex-col">
+    <header class="flex items-center justify-between px-6 py-5 border-b bg-white sticky top-0 z-30">
+      <button id="settings-button" class="text-2xl font-bold tracking-tight hover:text-blue-600 transition-colors">Settings</button>
+      <button id="emp-button" class="flex items-center gap-2 hover:bg-zinc-100 px-4 py-2 rounded-2xl transition-colors">
+        <span class="font-semibold text-xl">Emp</span>
+      </button>
+    </header>
+
+    <div class="px-6 py-4 bg-zinc-50 border-b">
+      <label for="search-input" class="sr-only">Search items</label>
+      <input
+        id="search-input"
+        type="text"
+        placeholder="Search items..."
+        class="w-full bg-white border border-zinc-300 rounded-3xl px-6 py-4 text-lg focus:outline-none focus:border-blue-500"
+      />
+    </div>
+
+    <main id="items-container" class="flex-1 overflow-auto pb-24"></main>
+
+    <footer class="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white border-t p-5">
+      <button id="print-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-5 rounded-3xl text-2xl transition-all active:scale-95">
+        PRINT
+      </button>
+    </footer>
+  </div>
+
+  <div id="employee-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="modal bg-white rounded-3xl w-full max-w-md mx-4 overflow-hidden">
+      <div class="p-6 border-b"><h2 class="text-xl font-bold">Employee Name</h2></div>
+      <div class="p-6 space-y-4">
+        <label for="emp-name" class="text-sm font-medium text-zinc-600">Used for this print action</label>
+        <input id="emp-name" class="w-full border border-zinc-300 rounded-2xl px-5 py-4 text-lg" placeholder="Enter employee name" />
+      </div>
+      <div class="border-t p-4 flex gap-3">
+        <button id="employee-cancel" class="flex-1 py-4 border border-zinc-300 rounded-2xl font-semibold">Cancel</button>
+        <button id="employee-save" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-semibold">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="emp-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="modal bg-white rounded-3xl w-full max-w-md mx-4 overflow-hidden">
+      <div class="p-6 border-b"><h2 class="text-xl font-bold">Default Employee</h2></div>
+      <div class="p-6 space-y-4">
+        <label for="global-emp-name" class="text-sm font-medium text-zinc-600">Applied when an item has no employee set</label>
+        <input id="global-emp-name" class="w-full border border-zinc-300 rounded-2xl px-5 py-4 text-lg" placeholder="Enter default employee name" />
+      </div>
+      <div class="border-t p-4 flex gap-3">
+        <button id="global-emp-cancel" class="flex-1 py-4 border border-zinc-300 rounded-2xl font-semibold">Cancel</button>
+        <button id="global-emp-save" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-semibold">Save Default</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="override-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="modal bg-white rounded-3xl w-full max-w-lg mx-4 overflow-hidden shadow-2xl">
+      <div class="p-6 border-b bg-zinc-50">
+        <h2 id="override-item-name" class="text-2xl font-bold text-center"></h2>
+        <p class="text-center text-sm text-zinc-500 mt-3">Use only when the expiration date needs to be shorter than the standard shelf life.</p>
+      </div>
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-6">
+          <div id="calendar-month-label" class="font-semibold text-lg"></div>
+          <div class="flex gap-4 text-2xl">
+            <button id="prev-month" class="text-zinc-400 hover:text-zinc-700" aria-label="Previous month">‹</button>
+            <button id="next-month" class="text-zinc-400 hover:text-zinc-700" aria-label="Next month">›</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-7 gap-2 text-center text-xs text-zinc-400 mb-2">
+          <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+        </div>
+        <div class="grid grid-cols-7 gap-2 text-center text-sm mb-8" id="calendar-grid"></div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm font-medium w-12">Time</span>
+          <input type="time" id="override-time" value="23:59" class="flex-1 border border-zinc-300 rounded-2xl px-5 py-3 text-lg" />
+        </div>
+      </div>
+      <div class="border-t p-4 flex gap-3">
+        <button id="override-cancel" class="flex-1 py-4 border border-zinc-300 rounded-2xl font-semibold text-lg">CANCEL</button>
+        <button id="override-confirm" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-semibold text-lg">CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="printer-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="modal bg-white rounded-3xl w-full max-w-md mx-4 p-10 text-center">
+      <div class="flex justify-center gap-12 mb-8"><span class="text-7xl">🖨️</span><span class="text-7xl">📱</span></div>
+      <h2 class="text-3xl font-bold mb-3">Set Phone Beside Printer</h2>
+      <p class="text-zinc-500 text-lg mb-10">Make sure it's less than 6 inches</p>
+      <div class="h-2 bg-blue-500 rounded-full w-3/4 mx-auto animate-pulse"></div>
+      <button id="printer-cancel" class="mt-12 text-red-500 font-semibold text-lg">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    const items = [
+      { id: 251882, name: 'Ezme', quantity: 0, madeDate: null, employeeName: '', category: 'Meze', shelfLifeNumber: 3, shelfLifeUnit: 'days' },
+      { id: 251884, name: 'Cacik', quantity: 0, madeDate: null, employeeName: '', category: 'Meze', shelfLifeNumber: 3, shelfLifeUnit: 'days' },
+      { id: 251885, name: 'Humus', quantity: 0, madeDate: null, employeeName: '', category: 'Meze', shelfLifeNumber: 3, shelfLifeUnit: 'days' },
+      { id: 251888, name: 'Lentil Soup', quantity: 0, madeDate: null, employeeName: '', category: 'Soup', shelfLifeNumber: 3, shelfLifeUnit: 'days' },
+      { id: 252009, name: 'Hot Sauce', quantity: 0, madeDate: null, employeeName: '', category: 'Sauce', shelfLifeNumber: 7, shelfLifeUnit: 'days' },
+      { id: 386236, name: 'Rice (Rice Cooker)', quantity: 0, madeDate: null, employeeName: '', category: 'Sides', shelfLifeNumber: 1, shelfLifeUnit: 'days' }
+    ];
+
+    let globalEmployeeName = '';
+    let currentOverrideItemId = null;
+    let selectedOverrideDate = new Date();
+
+    const els = {
+      itemsContainer: document.getElementById('items-container'),
+      searchInput: document.getElementById('search-input'),
+      empName: document.getElementById('emp-name'),
+      globalEmpName: document.getElementById('global-emp-name'),
+      employeeModal: document.getElementById('employee-modal'),
+      empModal: document.getElementById('emp-modal'),
+      overrideModal: document.getElementById('override-modal'),
+      printerModal: document.getElementById('printer-modal'),
+      overrideItemName: document.getElementById('override-item-name'),
+      calendarGrid: document.getElementById('calendar-grid'),
+      calendarMonthLabel: document.getElementById('calendar-month-label')
+    };
+
+    function openModal(modalEl) { modalEl.classList.remove('hidden'); }
+    function closeModal(modalEl) { modalEl.classList.add('hidden'); }
+
+    function renderItems(filtered = items) {
+      els.itemsContainer.innerHTML = '';
+
+      filtered.forEach((item) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'item-row px-6 py-6 flex items-center border-b last:border-none';
+
+        const showOverride = item.quantity > 0;
+        wrapper.innerHTML = `
+          <button class="text-left flex-1 min-w-0 js-item-name">
+            <div class="font-semibold text-lg">${item.name}</div>
+            ${item.madeDate ? `<div class="text-blue-600 text-sm mt-1">Override: ${item.madeDate}</div>` : ''}
+            ${item.employeeName ? `<div class="text-zinc-500 text-sm mt-1">${item.employeeName}</div>` : ''}
+          </button>
+          <div class="flex items-center">
+            ${showOverride ? '<button class="js-override text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-1.5 rounded-2xl font-medium mr-4">Expiration Override</button>' : ''}
+            <div class="flex items-center gap-4">
+              <button class="js-minus w-9 h-9 flex items-center justify-center text-2xl font-light bg-zinc-100 hover:bg-zinc-200 rounded-2xl" aria-label="Decrease quantity">-</button>
+              <div class="w-10 text-center font-bold text-2xl ${item.quantity > 0 ? 'text-green-600' : 'text-zinc-400'}">${item.quantity}</div>
+              <button class="js-plus w-9 h-9 flex items-center justify-center text-2xl font-light bg-zinc-100 hover:bg-zinc-200 rounded-2xl" aria-label="Increase quantity">+</button>
+            </div>
+          </div>
+        `;
+
+        wrapper.querySelector('.js-item-name').addEventListener('click', () => openEmployeeModal(item.id));
+        wrapper.querySelector('.js-minus').addEventListener('click', () => updateQuantity(item.id, -1));
+        wrapper.querySelector('.js-plus').addEventListener('click', () => updateQuantity(item.id, 1));
+
+        const overrideButton = wrapper.querySelector('.js-override');
+        if (overrideButton) {
+          overrideButton.addEventListener('click', () => showOverrideModal(item.id));
+        }
+
+        els.itemsContainer.appendChild(wrapper);
+      });
+    }
+
+    function liveSearch() {
+      const term = els.searchInput.value.toLowerCase().trim();
+      const filtered = term ? items.filter((item) => item.name.toLowerCase().includes(term)) : items;
+      renderItems(filtered);
+    }
+
+    function updateQuantity(id, delta) {
+      const item = items.find((entry) => entry.id === id);
+      if (!item) return;
+      item.quantity = Math.max(0, item.quantity + delta);
+      renderItems();
+    }
+
+    function openEmpModal() {
+      els.globalEmpName.value = globalEmployeeName;
+      openModal(els.empModal);
+    }
+
+    function saveGlobalEmployee() {
+      globalEmployeeName = els.globalEmpName.value.trim();
+      items.forEach((item) => {
+        if (!item.employeeName) item.employeeName = globalEmployeeName;
+      });
+      closeModal(els.empModal);
+      renderItems();
+    }
+
+    function openEmployeeModal(id) {
+      const target = items.find((item) => item.id === id);
+      els.empName.value = target?.employeeName || globalEmployeeName;
+      els.empName.dataset.itemId = id;
+      openModal(els.employeeModal);
+    }
+
+    function saveEmployeeAndPrint() {
+      const entered = els.empName.value.trim();
+      const selectedItemId = Number(els.empName.dataset.itemId);
+      const selectedItem = items.find((item) => item.id === selectedItemId);
+
+      if (selectedItem && entered) selectedItem.employeeName = entered;
+      if (entered) globalEmployeeName = entered;
+
+      closeModal(els.employeeModal);
+      proceedToPrint();
+    }
+
+    function showOverrideModal(id) {
+      currentOverrideItemId = id;
+      const item = items.find((entry) => entry.id === id);
+      els.overrideItemName.textContent = item ? item.name : 'Item';
+      selectedOverrideDate = new Date();
+      renderCalendar();
+      openModal(els.overrideModal);
+    }
+
+    function renderCalendar() {
+      const firstDay = new Date(selectedOverrideDate.getFullYear(), selectedOverrideDate.getMonth(), 1);
+      const lastDay = new Date(selectedOverrideDate.getFullYear(), selectedOverrideDate.getMonth() + 1, 0);
+      const firstWeekday = firstDay.getDay();
+
+      els.calendarMonthLabel.textContent = firstDay.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      els.calendarGrid.innerHTML = '';
+
+      for (let i = 0; i < firstWeekday; i++) {
+        const blank = document.createElement('div');
+        els.calendarGrid.appendChild(blank);
+      }
+
+      for (let day = 1; day <= lastDay.getDate(); day++) {
+        const dayEl = document.createElement('button');
+        const isSelected = day === selectedOverrideDate.getDate();
+        dayEl.className = `calendar-day ${isSelected ? 'selected' : ''}`;
+        dayEl.textContent = day;
+        dayEl.addEventListener('click', () => {
+          selectedOverrideDate.setDate(day);
+          renderCalendar();
+        });
+        els.calendarGrid.appendChild(dayEl);
+      }
+    }
+
+    function changeMonth(delta) {
+      selectedOverrideDate = new Date(selectedOverrideDate.getFullYear(), selectedOverrideDate.getMonth() + delta, 1);
+      renderCalendar();
+    }
+
+    function confirmOverride() {
+      const item = items.find((entry) => entry.id === currentOverrideItemId);
+      if (!item) return;
+
+      const [hour, minute] = document.getElementById('override-time').value.split(':').map(Number);
+      const override = new Date(selectedOverrideDate);
+      override.setHours(hour || 23, minute || 59, 0, 0);
+
+      item.madeDate = override.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+
+      closeModal(els.overrideModal);
+      renderItems();
+    }
+
+    function handlePrint() {
+      const selected = items.filter((item) => item.quantity > 0);
+      if (!selected.length) {
+        window.alert('Please add at least one item with quantity > 0.');
+        return;
+      }
+
+      const needsEmployee = selected.some((item) => !item.employeeName && !globalEmployeeName);
+      if (needsEmployee) {
+        els.empName.value = '';
+        delete els.empName.dataset.itemId;
+        openModal(els.employeeModal);
+        return;
+      }
+
+      proceedToPrint();
+    }
+
+    function proceedToPrint() {
+      openModal(els.printerModal);
+      setTimeout(() => {
+        closeModal(els.printerModal);
+        window.alert('✅ Labels sent to Bixolon SLP-DX220 via Bluetooth!');
+        items.forEach((item) => {
+          item.quantity = 0;
+          item.employeeName = item.employeeName || globalEmployeeName;
+        });
+        renderItems();
+      }, 2000);
+    }
+
+    document.getElementById('settings-button').addEventListener('click', () => window.alert('Settings editor can be wired in next pass.'));
+    document.getElementById('emp-button').addEventListener('click', openEmpModal);
+    document.getElementById('print-button').addEventListener('click', handlePrint);
+    document.getElementById('employee-cancel').addEventListener('click', () => closeModal(els.employeeModal));
+    document.getElementById('employee-save').addEventListener('click', saveEmployeeAndPrint);
+    document.getElementById('global-emp-cancel').addEventListener('click', () => closeModal(els.empModal));
+    document.getElementById('global-emp-save').addEventListener('click', saveGlobalEmployee);
+    document.getElementById('override-cancel').addEventListener('click', () => closeModal(els.overrideModal));
+    document.getElementById('override-confirm').addEventListener('click', confirmOverride);
+    document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
+    document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
+    document.getElementById('printer-cancel').addEventListener('click', () => closeModal(els.printerModal));
+    els.searchInput.addEventListener('input', liveSearch);
+
+    window.addEventListener('load', () => {
+      renderItems();
+      els.searchInput.focus();
+    });
+  </script>
+</body>
+</html>
